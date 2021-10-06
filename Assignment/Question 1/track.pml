@@ -15,93 +15,71 @@ chan ch32e = [0] of {bit};
 chan ch21 = [0] of {bit};
 chan ch21e = [0] of {bit};
 
-proctype Track12() 
+active proctype Track12() 
 {
-	bit in = 0; 
+	byte shuttle; 
 	do 
-	:: (in == 0) -> ch12?1; in = 1;
-	:: (in == 1) -> in = 0; ch12e!in;
+	:: ch12?shuttle-> ch12e!shuttle;
 	od;
-	
 }
 
-proctype Track23() 
+active proctype Track23() 
 {
-	bit in = 0; 
+	byte shuttle; 
 	do 
-	:: (in == 0) -> ch23?1; in = 1;
-	:: (in == 1) -> in = 0; ch23e!in;
+	:: ch23?shuttle -> ch23e!shuttle;
 	od;
-	
-}
-proctype Track34() 
-{
-	bit in = 0; 
-	do 
-	:: (in == 0) -> ch34?1; in = 1;
-	:: (in == 1) -> in = 0; ch34e!in;
-	od;
-	
 }
 
-proctype Track41() 
+active proctype Track34() 
 {
-	bit in = 0; 
+	byte shuttle; 
 	do 
-	:: (in == 0) -> ch41?1; in = 1;
-	:: (in == 1) -> in = 0; ch41e!in;
+	:: ch34?shuttle -> ch34e!shuttle;
 	od;
-	
 }
 
-proctype Track14() 
+active proctype Track41() 
 {
-	bit in = 0; 
+	byte shuttle; 
 	do 
-	:: (in == 0) -> ch14?1; in = 1;
-	:: (in == 1) -> in = 0; ch14e!in;
+	:: ch41?shuttle -> ch41e!shuttle;
 	od;
-	
 }
 
-proctype Track43() 
+active proctype Track14() 
 {
-	bit in = 0; 
+	byte shuttle; 
 	do 
-	:: (in == 0) -> ch43?1; in = 1;
-	:: (in == 1) -> in = 0; ch43e!in;
+	:: ch14?shuttle -> ch14e!shuttle;
 	od;
-	
 }
 
-proctype Track32() 
+active proctype Track43() 
 {
-	bit in = 0; 
+	byte shuttle; 
 	do 
-	:: (in == 0) -> ch32?1; in = 1;
-	:: (in == 1) -> in = 0; ch32e!in;
+	:: ch43?shuttle -> ch43e!shuttle;
 	od;
-	
 }
 
-proctype Track21() 
+active proctype Track32() 
 {
-	bit in = 0; 
+	byte shuttle; 
 	do 
-	:: (in == 0) -> ch21?1; in = 1;
-	:: (in == 1) -> in = 0; ch21e!in;
+	:: ch32?shuttle -> ch32e!shuttle;
 	od;
-	
+}
+
+active proctype Track21() 
+{
+	byte shuttle; 
+	do 
+	:: ch21?shuttle -> ch21e!shuttle;
+	od;
 }
 
 
 init {
-	run Track12(); 
-	run Track23();
-	run Track34();
-	run Track41();
-	run Track14();
-	run Track43();
-	run Track32();
-	run Track21(); 
+	bool running = true; 
 }
