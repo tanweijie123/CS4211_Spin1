@@ -71,13 +71,13 @@ active proctype Track21()
 	od;
 }
 
-chan s1alert = [4] of { byte }; //first = ordernum, second for source, 3rd for dest, 4th for capacity
+chan s1alert = [5] of { byte }; //first = ordernum, second for source, 3rd for dest, 4th for capacity
 chan s1conf = [1] of { bit };
-chan s2alert = [4] of { byte }; 
+chan s2alert = [5] of { byte }; 
 chan s2conf = [1] of { bit };
-chan s3alert = [4] of { byte }; 
+chan s3alert = [5] of { byte }; 
 chan s3conf = [1] of { bit };
-chan s4alert = [4] of { byte }; 
+chan s4alert = [5] of { byte }; 
 chan s4conf = [1] of { bit };
 chan order1ch = [8] of { byte }; //to change number according to number of shuttle; (numShuttle * 2); 0 price is failure
 chan order2ch = [8] of { byte }; 
@@ -88,14 +88,17 @@ proctype shuttle1(byte station; byte capacity; byte charge)
 	bool inOrder = false; 
 	bool clockwise = true; 
 	byte sourceStation = station; 
-	byte destination = station; 
+
+	// order mgmt
+	byte reqOrderNumber;
+	byte reqSourceStation; 
+	byte reqDestStation; 
+	byte reqCapacity; 
+	
+	byte passengers[5]; // 1 -> stn1, 2 -> stn2, 3 -> stn3, etc. 
 	
 	do
 	:: (inOrder == false) -> 
-		byte reqOrderNumber;
-		byte reqSourceStation; 
-		byte reqDestStation; 
-		byte reqCapacity; 
 		s1alert?reqOrderNumber;
 		s1alert?reqSourceStation;
 		s1alert?reqDestStation;
@@ -110,14 +113,14 @@ proctype shuttle1(byte station; byte capacity; byte charge)
 			if 
 			:: (inOrder == true) -> 
 				sourceStation = reqSourceStation;
-				destination = reqDestStation; 
-				capacity = reqCapacity; 
+				passengers[reqDestStation] = reqCapacity; 
 				if
 				// directly opposite / current station can just use clockwise
 				:: ( (station == 1 && sourceStation == 4) || (station - sourceStation == 1)) -> 
 					clockwise = false; 
 				:: else -> clockwise = true;  
 				fi; 
+				s1alert!0; //delimiter for alerts. 
 			:: (inOrder == false) -> ;
 			fi; 
 		:: else -> 
@@ -128,17 +131,49 @@ proctype shuttle1(byte station; byte capacity; byte charge)
 		fi;	
 	:: (inOrder == true) ->
 		if
-		:: (fetch == false && sourceStation == station) -> 
-			fetch = true; 
+		:: (fetch) -> passengers[station] = 0; 
+		:: else -> ;
+		fi; 
 
-			// re-evaluate path 
+		s1alert?reqOrderNumber;
+		
+		if 
+		:: (reqOrderNumber > 0) -> 
+			s1alert?reqSourceStation;
+			s1alert?reqDestStation;
+			s1alert?reqCapacity;
+
+			byte currentCapacity = passengers[1] + passengers[2] + passengers[3] + passengers[4]; 
+			toCharge = reqCapacity * charge; 
+
+			bool canAccept = ((currentCapacity + reqCapacity) <= capacity) && 
+				( (clockwise && (station - 1) != reqSourceStation) || 
+				   (!clockwise && (station + 1) != reqSourceStation) ); 
+
+			bool newOrder = false; 
+
 			if 
-			:: ( (station == 1 && sourceStation == 4) || (station - sourceStation == 1)) -> 
-				clockwise = false; 
-			:: else -> clockwise = true;  
-			fi; 
+			:: (canAccept && reqOrderNumber == 1) -> 
+				atomic { order1ch!1; order1ch!toCharge }; s1conf?newOrder;
+			:: (canAccept && reqOrderNumber == 2) -> 
+				atomic { order2ch!1; order2ch!toCharge }; s1conf?newOrder;
+			:: (!canAccept && reqOrderNumber == 1) -> atomic { order1ch!1; order1ch!0 };	s1conf?newOrder; 
+			:: (!canAccept && reqOrderNumber == 2) -> atomic { order2ch!1; order2ch!0 };	s1conf?newOrder; 
+			fi;
 
-		:: (fetch == true && destination == station) -> inOrder = false; fetch = false; 
+			if
+			::(newOrder) -> 
+				passengers[reqDestStation] = reqCapacity; 
+			:: else -> ; 
+			fi;
+			
+		:: else -> s1alert!0; //no orders received
+		fi;
+		
+		if
+		:: (fetch == false && sourceStation == station) -> fetch = true; 
+		:: (fetch == true && (passengers[1] + passengers[2] + passengers[3] + passengers[4]) == 0) -> 
+			inOrder = false; fetch = false; s1alert?0; // remove last 0;
 		:: else -> 
 			if
 			:: (clockwise == true && station == 1) -> ch12!1; ch12e?1; station = 2;
@@ -160,14 +195,17 @@ proctype shuttle2(byte station; byte capacity; byte charge)
 	bool inOrder = false; 
 	bool clockwise = true; 
 	byte sourceStation = station; 
-	byte destination = station; 
+
+	// order mgmt
+	byte reqOrderNumber;
+	byte reqSourceStation; 
+	byte reqDestStation; 
+	byte reqCapacity; 
+	
+	byte passengers[5]; // 1 -> stn1, 2 -> stn2, 3 -> stn3, etc. 
 	
 	do
 	:: (inOrder == false) -> 
-		byte reqOrderNumber;
-		byte reqSourceStation; 
-		byte reqDestStation; 
-		byte reqCapacity; 
 		s2alert?reqOrderNumber;
 		s2alert?reqSourceStation;
 		s2alert?reqDestStation;
@@ -182,14 +220,14 @@ proctype shuttle2(byte station; byte capacity; byte charge)
 			if 
 			:: (inOrder == true) -> 
 				sourceStation = reqSourceStation;
-				destination = reqDestStation; 
-				capacity = reqCapacity; 
+				passengers[reqDestStation] = reqCapacity; 
 				if
 				// directly opposite / current station can just use clockwise
 				:: ( (station == 1 && sourceStation == 4) || (station - sourceStation == 1)) -> 
 					clockwise = false; 
 				:: else -> clockwise = true;  
 				fi; 
+				s2alert!0; //delimiter for alerts. 
 			:: (inOrder == false) -> ;
 			fi; 
 		:: else -> 
@@ -200,17 +238,49 @@ proctype shuttle2(byte station; byte capacity; byte charge)
 		fi;	
 	:: (inOrder == true) ->
 		if
-		:: (fetch == false && sourceStation == station) -> 
-			fetch = true; 
+		:: (fetch) -> passengers[station] = 0; 
+		:: else -> ;
+		fi; 
 
-			// re-evaluate path 
+		s2alert?reqOrderNumber;
+		
+		if 
+		:: (reqOrderNumber > 0) -> 
+			s2alert?reqSourceStation;
+			s2alert?reqDestStation;
+			s2alert?reqCapacity;
+
+			byte currentCapacity = passengers[1] + passengers[2] + passengers[3] + passengers[4]; 
+			toCharge = reqCapacity * charge; 
+
+			bool canAccept = ((currentCapacity + reqCapacity) <= capacity) && 
+				( (clockwise && (station - 1) != reqSourceStation) || 
+				   (!clockwise && (station + 1) != reqSourceStation) ); 
+
+			bool newOrder = false; 
+
 			if 
-			:: ( (station == 1 && sourceStation == 4) || (station - sourceStation == 1)) -> 
-				clockwise = false; 
-			:: else -> clockwise = true;  
-			fi; 
+			:: (canAccept && reqOrderNumber == 1) -> 
+				atomic { order1ch!2; order1ch!toCharge }; s2conf?newOrder;
+			:: (canAccept && reqOrderNumber == 2) -> 
+				atomic { order2ch!2; order2ch!toCharge }; s2conf?newOrder;
+			:: (!canAccept && reqOrderNumber == 1) -> atomic { order1ch!2; order1ch!0 };	s2conf?newOrder; 
+			:: (!canAccept && reqOrderNumber == 2) -> atomic { order2ch!2; order2ch!0 };	s2conf?newOrder; 
+			fi;
 
-		:: (fetch == true && destination == station) -> inOrder = false; fetch = false; 
+			if
+			::(newOrder) -> 
+				passengers[reqDestStation] = reqCapacity; 
+			:: else -> ; 
+			fi;
+			
+		:: else -> s2alert!0; //no orders received
+		fi;
+		
+		if
+		:: (fetch == false && sourceStation == station) -> fetch = true; 
+		:: (fetch == true && (passengers[1] + passengers[2] + passengers[3] + passengers[4]) == 0) -> 
+			inOrder = false; fetch = false; s2alert?0; // remove last 0;
 		:: else -> 
 			if
 			:: (clockwise == true && station == 1) -> ch12!1; ch12e?1; station = 2;
@@ -232,14 +302,17 @@ proctype shuttle3(byte station; byte capacity; byte charge)
 	bool inOrder = false; 
 	bool clockwise = true; 
 	byte sourceStation = station; 
-	byte destination = station; 
+
+	// order mgmt
+	byte reqOrderNumber;
+	byte reqSourceStation; 
+	byte reqDestStation; 
+	byte reqCapacity; 
+	
+	byte passengers[5]; // 1 -> stn1, 2 -> stn2, 3 -> stn3, etc. 
 	
 	do
 	:: (inOrder == false) -> 
-		byte reqOrderNumber;
-		byte reqSourceStation; 
-		byte reqDestStation; 
-		byte reqCapacity; 
 		s3alert?reqOrderNumber;
 		s3alert?reqSourceStation;
 		s3alert?reqDestStation;
@@ -254,14 +327,14 @@ proctype shuttle3(byte station; byte capacity; byte charge)
 			if 
 			:: (inOrder == true) -> 
 				sourceStation = reqSourceStation;
-				destination = reqDestStation; 
-				capacity = reqCapacity; 
+				passengers[reqDestStation] = reqCapacity; 
 				if
 				// directly opposite / current station can just use clockwise
 				:: ( (station == 1 && sourceStation == 4) || (station - sourceStation == 1)) -> 
 					clockwise = false; 
 				:: else -> clockwise = true;  
 				fi; 
+				s3alert!0; //delimiter for alerts. 
 			:: (inOrder == false) -> ;
 			fi; 
 		:: else -> 
@@ -272,17 +345,49 @@ proctype shuttle3(byte station; byte capacity; byte charge)
 		fi;	
 	:: (inOrder == true) ->
 		if
-		:: (fetch == false && sourceStation == station) -> 
-			fetch = true; 
+		:: (fetch) -> passengers[station] = 0; 
+		:: else -> ;
+		fi; 
 
-			// re-evaluate path 
+		s3alert?reqOrderNumber;
+		
+		if 
+		:: (reqOrderNumber > 0) -> 
+			s3alert?reqSourceStation;
+			s3alert?reqDestStation;
+			s3alert?reqCapacity;
+
+			byte currentCapacity = passengers[1] + passengers[2] + passengers[3] + passengers[4]; 
+			toCharge = reqCapacity * charge; 
+
+			bool canAccept = ((currentCapacity + reqCapacity) <= capacity) && 
+				( (clockwise && (station - 1) != reqSourceStation) || 
+				   (!clockwise && (station + 1) != reqSourceStation) ); 
+
+			bool newOrder = false; 
+
 			if 
-			:: ( (station == 1 && sourceStation == 4) || (station - sourceStation == 1)) -> 
-				clockwise = false; 
-			:: else -> clockwise = true;  
-			fi; 
+			:: (canAccept && reqOrderNumber == 1) -> 
+				atomic { order1ch!3; order1ch!toCharge }; s3conf?newOrder;
+			:: (canAccept && reqOrderNumber == 2) -> 
+				atomic { order2ch!3; order2ch!toCharge }; s3conf?newOrder;
+			:: (!canAccept && reqOrderNumber == 1) -> atomic { order1ch!3; order1ch!0 };	s3conf?newOrder; 
+			:: (!canAccept && reqOrderNumber == 2) -> atomic { order2ch!3; order2ch!0 };	s3conf?newOrder; 
+			fi;
 
-		:: (fetch == true && destination == station) -> inOrder = false; fetch = false; 
+			if
+			::(newOrder) -> 
+				passengers[reqDestStation] = reqCapacity; 
+			:: else -> ; 
+			fi;
+			
+		:: else -> s3alert!0; //no orders received
+		fi;
+		
+		if
+		:: (fetch == false && sourceStation == station) -> fetch = true; 
+		:: (fetch == true && (passengers[1] + passengers[2] + passengers[3] + passengers[4]) == 0) -> 
+			inOrder = false; fetch = false; s3alert?0; // remove last 0;
 		:: else -> 
 			if
 			:: (clockwise == true && station == 1) -> ch12!1; ch12e?1; station = 2;
@@ -304,14 +409,17 @@ proctype shuttle4(byte station; byte capacity; byte charge)
 	bool inOrder = false; 
 	bool clockwise = true; 
 	byte sourceStation = station; 
-	byte destination = station; 
+
+	// order mgmt
+	byte reqOrderNumber;
+	byte reqSourceStation; 
+	byte reqDestStation; 
+	byte reqCapacity; 
+	
+	byte passengers[5]; // 1 -> stn1, 2 -> stn2, 3 -> stn3, etc. 
 	
 	do
 	:: (inOrder == false) -> 
-		byte reqOrderNumber;
-		byte reqSourceStation; 
-		byte reqDestStation; 
-		byte reqCapacity; 
 		s4alert?reqOrderNumber;
 		s4alert?reqSourceStation;
 		s4alert?reqDestStation;
@@ -326,14 +434,14 @@ proctype shuttle4(byte station; byte capacity; byte charge)
 			if 
 			:: (inOrder == true) -> 
 				sourceStation = reqSourceStation;
-				destination = reqDestStation; 
-				capacity = reqCapacity; 
+				passengers[reqDestStation] = reqCapacity; 
 				if
 				// directly opposite / current station can just use clockwise
 				:: ( (station == 1 && sourceStation == 4) || (station - sourceStation == 1)) -> 
 					clockwise = false; 
 				:: else -> clockwise = true;  
 				fi; 
+				s3alert!0; //delimiter for alerts. 
 			:: (inOrder == false) -> ;
 			fi; 
 		:: else -> 
@@ -344,17 +452,49 @@ proctype shuttle4(byte station; byte capacity; byte charge)
 		fi;	
 	:: (inOrder == true) ->
 		if
-		:: (fetch == false && sourceStation == station) -> 
-			fetch = true; 
+		:: (fetch) -> passengers[station] = 0; 
+		:: else -> ;
+		fi; 
 
-			// re-evaluate path 
+		s4alert?reqOrderNumber;
+		
+		if 
+		:: (reqOrderNumber > 0) -> 
+			s4alert?reqSourceStation;
+			s4alert?reqDestStation;
+			s4alert?reqCapacity;
+
+			byte currentCapacity = passengers[1] + passengers[2] + passengers[3] + passengers[4]; 
+			toCharge = reqCapacity * charge; 
+
+			bool canAccept = ((currentCapacity + reqCapacity) <= capacity) && 
+				( (clockwise && (station - 1) != reqSourceStation) || 
+				   (!clockwise && (station + 1) != reqSourceStation) ); 
+
+			bool newOrder = false; 
+
 			if 
-			:: ( (station == 1 && sourceStation == 4) || (station - sourceStation == 1)) -> 
-				clockwise = false; 
-			:: else -> clockwise = true;  
-			fi; 
+			:: (canAccept && reqOrderNumber == 1) -> 
+				atomic { order1ch!4; order1ch!toCharge }; s4conf?newOrder;
+			:: (canAccept && reqOrderNumber == 2) -> 
+				atomic { order2ch!4; order2ch!toCharge }; s4conf?newOrder;
+			:: (!canAccept && reqOrderNumber == 1) -> atomic { order1ch!4; order1ch!0 };	s4conf?newOrder; 
+			:: (!canAccept && reqOrderNumber == 2) -> atomic { order2ch!4; order2ch!0 };	s4conf?newOrder; 
+			fi;
 
-		:: (fetch == true && destination == station) -> inOrder = false; fetch = false; 
+			if
+			::(newOrder) -> 
+				passengers[reqDestStation] = reqCapacity; 
+			:: else -> ; 
+			fi;
+			
+		:: else -> s4alert!0; //no orders received
+		fi;
+		
+		if
+		:: (fetch == false && sourceStation == station) -> fetch = true; 
+		:: (fetch == true && (passengers[1] + passengers[2] + passengers[3] + passengers[4]) == 0) -> 
+			inOrder = false; fetch = false; s4alert?0; // remove last 0;
 		:: else -> 
 			if
 			:: (clockwise == true && station == 1) -> ch12!1; ch12e?1; station = 2;
