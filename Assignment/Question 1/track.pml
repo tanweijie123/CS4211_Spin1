@@ -1,19 +1,19 @@
-chan ch12 = [0] of {bit};
-chan ch12e = [0] of {bit};
-chan ch23 = [0] of {bit};
-chan ch23e = [0] of {bit};
-chan ch34 = [0] of {bit};
-chan ch34e = [0] of {bit};
-chan ch41 = [0] of {bit};
-chan ch41e = [0] of {bit};
-chan ch14 = [0] of {bit};
-chan ch14e = [0] of {bit};
-chan ch43 = [0] of {bit};
-chan ch43e = [0] of {bit};
-chan ch32 = [0] of {bit};
-chan ch32e = [0] of {bit};
-chan ch21 = [0] of {bit};
-chan ch21e = [0] of {bit};
+chan ch12 = [0] of {byte};
+chan ch12e = [0] of {byte};
+chan ch23 = [0] of {byte};
+chan ch23e = [0] of {byte};
+chan ch34 = [0] of {byte};
+chan ch34e = [0] of {byte};
+chan ch41 = [0] of {byte};
+chan ch41e = [0] of {byte};
+chan ch14 = [0] of {byte};
+chan ch14e = [0] of {byte};
+chan ch43 = [0] of {byte};
+chan ch43e = [0] of {byte};
+chan ch32 = [0] of {byte};
+chan ch32e = [0] of {byte};
+chan ch21 = [0] of {byte};
+chan ch21e = [0] of {byte};
 
 active proctype Track12() 
 {
