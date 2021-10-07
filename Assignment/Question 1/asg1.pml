@@ -14,6 +14,7 @@ chan ch32 = [0] of {byte};
 chan ch32e = [0] of {byte};
 chan ch21 = [0] of {byte};
 chan ch21e = [0] of {byte};
+
 active proctype Track12() 
 {
 	byte shuttle; 
@@ -71,7 +72,10 @@ active proctype Track21()
 	od;
 }
 
-chan s1alert = [5] of { byte }; //first = ordernum, second for source, 3rd for dest, 4th for capacity
+chan orderMgmtIn = [4] of { byte };  //first = ordernum, second for source, 3rd for dest, 4th for capacity
+chan shuttleMgmtIn = [8] of { byte }; // { first = shuttle#, second = price (0 for fail); } * numShuttle
+
+chan s1alert = [5] of { byte }; //first = ordernum, second for source, 3rd for dest, 4th for capacity, extra space for {0} feeder
 chan s1conf = [1] of { bit };
 chan s2alert = [5] of { byte }; 
 chan s2conf = [1] of { bit };
@@ -79,8 +83,95 @@ chan s3alert = [5] of { byte };
 chan s3conf = [1] of { bit };
 chan s4alert = [5] of { byte }; 
 chan s4conf = [1] of { bit };
-chan order1ch = [8] of { byte }; //to change number according to number of shuttle; (numShuttle * 2); 0 price is failure
-chan order2ch = [8] of { byte }; 
+
+active proctype Management() {
+	
+	// order mgmt
+	byte reqOrderNumber;
+	byte reqSourceStation; 
+	byte reqDestStation; 
+	byte reqCapacity; 
+	do 
+	:: (true) -> 
+		orderMgmtIn?reqOrderNumber;
+		orderMgmtIn?reqSourceStation;
+		orderMgmtIn?reqDestStation;
+		orderMgmtIn?reqCapacity;
+
+		// pump info to all shuttles 
+		atomic {
+		s1alert!reqOrderNumber; 
+		s1alert!reqSourceStation;
+		s1alert!reqDestStation;
+		s1alert!reqCapacity;
+		}
+		atomic {
+		s2alert!reqOrderNumber; 
+		s2alert!reqSourceStation;
+		s2alert!reqDestStation;
+		s2alert!reqCapacity;
+		}
+		atomic {
+		s3alert!reqOrderNumber; 
+		s3alert!reqSourceStation;
+		s3alert!reqDestStation;
+		s3alert!reqCapacity;
+		}
+		atomic {
+		s4alert!reqOrderNumber; 
+		s4alert!reqSourceStation;
+		s4alert!reqDestStation;
+		s4alert!reqCapacity;
+		}
+
+		// receive reply & get assign to lowest
+		int lowestPrice = 1000000; 
+		int lowestShuttle = 0; 
+		int thisPrice = lowestPrice; 
+		int thisShuttle = lowestShuttle; 
+
+		// loop through all shuttles
+		shuttleMgmtIn?thisShuttle;
+		shuttleMgmtIn?thisPrice; 
+		if 
+		::(thisPrice == 0) -> ;
+		::(thisPrice > 0 && thisPrice < lowestPrice) -> lowestPrice = thisPrice; lowestShuttle = thisShuttle;
+		::else ->; 
+		fi;
+
+		shuttleMgmtIn?thisShuttle;
+		shuttleMgmtIn?thisPrice; 
+		if 
+		::(thisPrice == 0) -> ;
+		::(thisPrice > 0 && thisPrice < lowestPrice) -> lowestPrice = thisPrice; lowestShuttle = thisShuttle;
+		::else ->; 
+		fi;
+
+		shuttleMgmtIn?thisShuttle;
+		shuttleMgmtIn?thisPrice; 
+		if 
+		::(thisPrice == 0) -> ;
+		::(thisPrice > 0 && thisPrice < lowestPrice) -> lowestPrice = thisPrice; lowestShuttle = thisShuttle;
+		::else ->; 
+		fi;
+
+		shuttleMgmtIn?thisShuttle;
+		shuttleMgmtIn?thisPrice; 
+		if 
+		::(thisPrice == 0) -> ;
+		::(thisPrice > 0 && thisPrice < lowestPrice) -> lowestPrice = thisPrice; lowestShuttle = thisShuttle;
+		::else ->; 
+		fi;
+	
+		// feedback 1 to lowestShuttle
+		s1conf!(lowestShuttle == 1);	
+		s2conf!(lowestShuttle == 2);	
+		s3conf!(lowestShuttle == 3);	
+		s4conf!(lowestShuttle == 4);		
+	od; 
+	
+}
+
 
 proctype shuttle1(byte station; byte capacity; byte charge)
 {
@@ -106,10 +197,7 @@ proctype shuttle1(byte station; byte capacity; byte charge)
 		if
 		:: (reqCapacity <= capacity) -> 
 			int toCharge = reqCapacity * charge; 
-			if
-			:: (reqOrderNumber == 1) -> atomic { order1ch!1; order1ch!toCharge }; s1conf?inOrder;
-			:: (reqOrderNumber == 2) -> atomic { order2ch!1; order2ch!toCharge }; s1conf?inOrder;
-			fi; 				 	
+			atomic { shuttleMgmtIn!1; shuttleMgmtIn!toCharge }; s1conf?inOrder;				 	
 			if 
 			:: (inOrder == true) -> 
 				sourceStation = reqSourceStation;
@@ -123,11 +211,7 @@ proctype shuttle1(byte station; byte capacity; byte charge)
 				s1alert!0; //delimiter for alerts. 
 			:: (inOrder == false) -> ;
 			fi; 
-		:: else -> 
-			if
-			:: (reqOrderNumber == 1) -> atomic { order1ch!1; order1ch!0 };	s1conf?inOrder; 
-			:: (reqOrderNumber == 2) -> atomic { order2ch!1; order2ch!0 };	s1conf?inOrder; 
-			fi;
+		:: else -> atomic { shuttleMgmtIn!1; shuttleMgmtIn!0 };	s1conf?inOrder; 
 		fi;	
 	:: (inOrder == true) ->
 		if
@@ -153,12 +237,8 @@ proctype shuttle1(byte station; byte capacity; byte charge)
 			bool newOrder = false; 
 
 			if 
-			:: (canAccept && reqOrderNumber == 1) -> 
-				atomic { order1ch!1; order1ch!toCharge }; s1conf?newOrder;
-			:: (canAccept && reqOrderNumber == 2) -> 
-				atomic { order2ch!1; order2ch!toCharge }; s1conf?newOrder;
-			:: (!canAccept && reqOrderNumber == 1) -> atomic { order1ch!1; order1ch!0 };	s1conf?newOrder; 
-			:: (!canAccept && reqOrderNumber == 2) -> atomic { order2ch!1; order2ch!0 };	s1conf?newOrder; 
+			:: (canAccept) -> atomic { shuttleMgmtIn!1; shuttleMgmtIn!toCharge }; s1conf?newOrder;
+			:: (!canAccept) -> atomic { shuttleMgmtIn!1; shuttleMgmtIn!0 };	s1conf?newOrder; 
 			fi;
 
 			if
@@ -213,10 +293,7 @@ proctype shuttle2(byte station; byte capacity; byte charge)
 		if
 		:: (reqCapacity <= capacity) -> 
 			int toCharge = reqCapacity * charge; 
-			if
-			:: (reqOrderNumber == 1) -> atomic { order1ch!2; order1ch!toCharge }; s2conf?inOrder;
-			:: (reqOrderNumber == 2) -> atomic { order2ch!2; order2ch!toCharge }; s2conf?inOrder;
-			fi; 				 	
+				atomic { shuttleMgmtIn!2; shuttleMgmtIn!toCharge }; s2conf?inOrder;				 	
 			if 
 			:: (inOrder == true) -> 
 				sourceStation = reqSourceStation;
@@ -230,11 +307,7 @@ proctype shuttle2(byte station; byte capacity; byte charge)
 				s2alert!0; //delimiter for alerts. 
 			:: (inOrder == false) -> ;
 			fi; 
-		:: else -> 
-			if
-			:: (reqOrderNumber == 1) -> atomic { order1ch!2; order1ch!0 };	s2conf?inOrder; 
-			:: (reqOrderNumber == 2) -> atomic { order2ch!2; order2ch!0 };	s2conf?inOrder; 
-			fi;
+		:: else -> atomic { shuttleMgmtIn!2; shuttleMgmtIn!0 };	s2conf?inOrder; 
 		fi;	
 	:: (inOrder == true) ->
 		if
@@ -260,12 +333,8 @@ proctype shuttle2(byte station; byte capacity; byte charge)
 			bool newOrder = false; 
 
 			if 
-			:: (canAccept && reqOrderNumber == 1) -> 
-				atomic { order1ch!2; order1ch!toCharge }; s2conf?newOrder;
-			:: (canAccept && reqOrderNumber == 2) -> 
-				atomic { order2ch!2; order2ch!toCharge }; s2conf?newOrder;
-			:: (!canAccept && reqOrderNumber == 1) -> atomic { order1ch!2; order1ch!0 };	s2conf?newOrder; 
-			:: (!canAccept && reqOrderNumber == 2) -> atomic { order2ch!2; order2ch!0 };	s2conf?newOrder; 
+			:: (canAccept) -> atomic { shuttleMgmtIn!2; shuttleMgmtIn!toCharge }; s2conf?newOrder;
+			:: (!canAccept) -> atomic { shuttleMgmtIn!2; shuttleMgmtIn!0 };	s2conf?newOrder; 
 			fi;
 
 			if
@@ -320,10 +389,8 @@ proctype shuttle3(byte station; byte capacity; byte charge)
 		if
 		:: (reqCapacity <= capacity) -> 
 			int toCharge = reqCapacity * charge; 
-			if
-			:: (reqOrderNumber == 1) -> atomic { order1ch!3; order1ch!toCharge }; s3conf?inOrder;
-			:: (reqOrderNumber == 2) -> atomic { order2ch!3; order2ch!toCharge }; s3conf?inOrder;
-			fi; 				 	
+			atomic { shuttleMgmtIn!3; shuttleMgmtIn!toCharge }; s3conf?inOrder;
+							 	
 			if 
 			:: (inOrder == true) -> 
 				sourceStation = reqSourceStation;
@@ -337,11 +404,7 @@ proctype shuttle3(byte station; byte capacity; byte charge)
 				s3alert!0; //delimiter for alerts. 
 			:: (inOrder == false) -> ;
 			fi; 
-		:: else -> 
-			if
-			:: (reqOrderNumber == 1) -> atomic { order1ch!3; order1ch!0 };	s3conf?inOrder; 
-			:: (reqOrderNumber == 2) -> atomic { order2ch!3; order2ch!0 };	s3conf?inOrder; 
-			fi;
+		:: else -> atomic { shuttleMgmtIn!3; shuttleMgmtIn!0 };	s3conf?inOrder; 
 		fi;	
 	:: (inOrder == true) ->
 		if
@@ -367,12 +430,8 @@ proctype shuttle3(byte station; byte capacity; byte charge)
 			bool newOrder = false; 
 
 			if 
-			:: (canAccept && reqOrderNumber == 1) -> 
-				atomic { order1ch!3; order1ch!toCharge }; s3conf?newOrder;
-			:: (canAccept && reqOrderNumber == 2) -> 
-				atomic { order2ch!3; order2ch!toCharge }; s3conf?newOrder;
-			:: (!canAccept && reqOrderNumber == 1) -> atomic { order1ch!3; order1ch!0 };	s3conf?newOrder; 
-			:: (!canAccept && reqOrderNumber == 2) -> atomic { order2ch!3; order2ch!0 };	s3conf?newOrder; 
+			:: (canAccept) -> atomic { shuttleMgmtIn!3; shuttleMgmtIn!toCharge }; s3conf?newOrder;
+			:: (!canAccept) -> atomic { shuttleMgmtIn!3; shuttleMgmtIn!0 };	s3conf?newOrder; 
 			fi;
 
 			if
@@ -427,10 +486,8 @@ proctype shuttle4(byte station; byte capacity; byte charge)
 		if
 		:: (reqCapacity <= capacity) -> 
 			int toCharge = reqCapacity * charge; 
-			if
-			:: (reqOrderNumber == 1) -> atomic { order1ch!4; order1ch!toCharge }; s4conf?inOrder;
-			:: (reqOrderNumber == 2) -> atomic { order2ch!4; order2ch!toCharge }; s4conf?inOrder;
-			fi; 				 	
+			atomic { shuttleMgmtIn!4; shuttleMgmtIn!toCharge }; s4conf?inOrder;
+				 	
 			if 
 			:: (inOrder == true) -> 
 				sourceStation = reqSourceStation;
@@ -444,12 +501,9 @@ proctype shuttle4(byte station; byte capacity; byte charge)
 				s3alert!0; //delimiter for alerts. 
 			:: (inOrder == false) -> ;
 			fi; 
-		:: else -> 
-			if
-			:: (reqOrderNumber == 1) -> atomic { order1ch!4; order1ch!0 };	s4conf?inOrder; 
-			:: (reqOrderNumber == 2) -> atomic { order2ch!4; order2ch!0 };	s4conf?inOrder; 
-			fi;
+		:: else -> atomic { shuttleMgmtIn!4; shuttleMgmtIn!0 };	s4conf?inOrder; 
 		fi;	
+
 	:: (inOrder == true) ->
 		if
 		:: (fetch) -> passengers[station] = 0; 
@@ -474,12 +528,8 @@ proctype shuttle4(byte station; byte capacity; byte charge)
 			bool newOrder = false; 
 
 			if 
-			:: (canAccept && reqOrderNumber == 1) -> 
-				atomic { order1ch!4; order1ch!toCharge }; s4conf?newOrder;
-			:: (canAccept && reqOrderNumber == 2) -> 
-				atomic { order2ch!4; order2ch!toCharge }; s4conf?newOrder;
-			:: (!canAccept && reqOrderNumber == 1) -> atomic { order1ch!4; order1ch!0 };	s4conf?newOrder; 
-			:: (!canAccept && reqOrderNumber == 2) -> atomic { order2ch!4; order2ch!0 };	s4conf?newOrder; 
+			:: (canAccept) -> atomic { shuttleMgmtIn!4; shuttleMgmtIn!toCharge }; s4conf?newOrder;
+			:: (!canAccept) -> atomic { shuttleMgmtIn!4; shuttleMgmtIn!0 };	s4conf?newOrder; 
 			fi;
 
 			if
@@ -510,160 +560,18 @@ proctype shuttle4(byte station; byte capacity; byte charge)
 	od; 
 }
 
-proctype order1(byte sourceStn; byte destStn; byte numPeople) {
-	// ping all shuttles
+proctype order(byte orderNumber; byte sourceStn; byte destStn; byte numPeople) {
 	atomic {
-	s1alert!1; 
-	s1alert!sourceStn;
-	s1alert!destStn;
-	s1alert!numPeople;
+	orderMgmtIn!orderNumber;
+	orderMgmtIn!sourceStn;
+	orderMgmtIn!destStn;
+	orderMgmtIn!numPeople;
 	}
-
-	atomic {
-	s2alert!1; 
-	s2alert!sourceStn;
-	s2alert!destStn;
-	s2alert!numPeople;
-	}
-
-	atomic {
-	s3alert!1; 
-	s3alert!sourceStn;
-	s3alert!destStn;
-	s3alert!numPeople;
-	}
-
-	atomic {
-	s4alert!1; 
-	s4alert!sourceStn;
-	s4alert!destStn;
-	s4alert!numPeople;
-	}
-
-	//get order price
-	int lowestPrice = 1000000; 
-	int lowestShuttle = 0; 
-	int thisPrice = lowestPrice; 
-	int thisShuttle = lowestShuttle; 
-
-	// loop through all shuttles
-	order1ch?thisShuttle;
-	order1ch?thisPrice; 
-	if 
-	::(thisPrice == 0) -> ;
-	::(thisPrice > 0 && thisPrice < lowestPrice) -> lowestPrice = thisPrice; lowestShuttle = thisShuttle;
-	::else ->; 
-	fi;
-
-	order1ch?thisShuttle;
-	order1ch?thisPrice; 
-	if 
-	::(thisPrice == 0) -> ;
-	::(thisPrice > 0 && thisPrice < lowestPrice) -> lowestPrice = thisPrice; lowestShuttle = thisShuttle;
-	::else ->; 
-	fi;
-
-	order1ch?thisShuttle;
-	order1ch?thisPrice; 
-	if 
-	::(thisPrice == 0) -> ;
-	::(thisPrice > 0 && thisPrice < lowestPrice) -> lowestPrice = thisPrice; lowestShuttle = thisShuttle;
-	::else ->; 
-	fi;
-
-	order1ch?thisShuttle;
-	order1ch?thisPrice; 
-	if 
-	::(thisPrice == 0) -> ;
-	::(thisPrice > 0 && thisPrice < lowestPrice) -> lowestPrice = thisPrice; lowestShuttle = thisShuttle;
-	::else ->; 
-	fi;
-	
-	// feedback 1 to lowestShuttle
-	s1conf!(lowestShuttle == 1);	
-	s2conf!(lowestShuttle == 2);	
-	s3conf!(lowestShuttle == 3);	
-	s4conf!(lowestShuttle == 4);	
-}
-proctype order2(byte sourceStn; byte destStn; byte numPeople) {
-	// ping all shuttles
-	atomic {
-	s1alert!2; 
-	s1alert!sourceStn;
-	s1alert!destStn;
-	s1alert!numPeople;
-	}
-
-	atomic {
-	s2alert!2; 
-	s2alert!sourceStn;
-	s2alert!destStn;
-	s2alert!numPeople;
-	}
-
-	atomic {
-	s3alert!2; 
-	s3alert!sourceStn;
-	s3alert!destStn;
-	s3alert!numPeople;
-	}
-
-	atomic {
-	s4alert!2; 
-	s4alert!sourceStn;
-	s4alert!destStn;
-	s4alert!numPeople;
-	}
-
-	//get order price
-	int lowestPrice = 1000000; 
-	int lowestShuttle = 0; 
-	int thisPrice = lowestPrice; 
-	int thisShuttle = lowestShuttle; 
-
-	// loop through all shuttles
-	order2ch?thisShuttle;
-	order2ch?thisPrice; 
-	if 
-	::(thisPrice == 0) -> ;
-	::(thisPrice > 0 && thisPrice < lowestPrice) -> lowestPrice = thisPrice; lowestShuttle = thisShuttle;
-	::else ->; 
-	fi;
-
-	order2ch?thisShuttle;
-	order2ch?thisPrice; 
-	if 
-	::(thisPrice == 0) -> ;
-	::(thisPrice > 0 && thisPrice < lowestPrice) -> lowestPrice = thisPrice; lowestShuttle = thisShuttle;
-	::else ->; 
-	fi;
-
-	order2ch?thisShuttle;
-	order2ch?thisPrice; 
-	if 
-	::(thisPrice == 0) -> ;
-	::(thisPrice > 0 && thisPrice < lowestPrice) -> lowestPrice = thisPrice; lowestShuttle = thisShuttle;
-	::else ->; 
-	fi;
-
-	order2ch?thisShuttle;
-	order2ch?thisPrice; 
-	if 
-	::(thisPrice == 0) -> ;
-	::(thisPrice > 0 && thisPrice < lowestPrice) -> lowestPrice = thisPrice; lowestShuttle = thisShuttle;
-	::else ->; 
-	fi;
-	
-	// feedback 1 to lowestShuttle
-	s1conf!(lowestShuttle == 1);	
-	s2conf!(lowestShuttle == 2);	
-	s3conf!(lowestShuttle == 3);	
-	s4conf!(lowestShuttle == 4);		
 }
 init {
-	//order -> (byte sourceStn; byte destStn; byte numPeople)
-	run order1(1, 3, 4); 
-	run order2(2, 3, 2); 
+	//order -> (byte orderNumber; byte sourceStn; byte destStn; byte numPeople)
+	run order(1, 1, 3, 4); 
+	run order(2, 2, 3, 2); 
 
 	//shuttle -> (byte station; byte capacity; byte charge)
 	run shuttle1(1,4,2); 
