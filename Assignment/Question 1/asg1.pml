@@ -71,12 +71,14 @@ active proctype Track21()
 	od;
 }
 
-chan s1alert = [3] of { byte }; //first for source, second for dest, third for capacity
+chan s1alert = [4] of { byte }; //first = ordernum, second for source, 3rd for dest, 4th for capacity
 chan s1conf = [1] of { bit };
 chan order1ch = [2] of { byte }; //to change number according to number of shuttle; 0 is failure
+chan order2ch = [2] of { byte }; //to change number according to number of shuttle; 0 is failure
 
 proctype shuttle1(byte station; byte capacity; byte charge)
 {
+	bool fetch = false; 
 	bool inOrder = false; 
 	bool clockwise = true; 
 	byte sourceStation = station; 
@@ -84,16 +86,21 @@ proctype shuttle1(byte station; byte capacity; byte charge)
 	
 	do
 	:: (inOrder == false) -> 
+		byte reqOrderNumber;
 		byte reqSourceStation; 
 		byte reqDestStation; 
 		byte reqCapacity; 
+		s1alert?reqOrderNumber;
 		s1alert?reqSourceStation;
 		s1alert?reqDestStation;
 		s1alert?reqCapacity;
 		if
 		:: (reqCapacity <= capacity) -> 
 			int toCharge = reqCapacity * charge; 
-			atomic { order1ch!1; order1ch!toCharge }; s1conf?inOrder; 	
+			if
+			:: (reqOrderNumber == 1) -> atomic { order1ch!1; order1ch!toCharge }; s1conf?inOrder;
+			:: (reqOrderNumber == 2) -> atomic { order2ch!1; order2ch!toCharge }; s1conf?inOrder;
+			fi; 				 	
 			if 
 			:: (inOrder == true) -> 
 				sourceStation = reqSourceStation;
@@ -107,11 +114,25 @@ proctype shuttle1(byte station; byte capacity; byte charge)
 				fi; 
 			:: (inOrder == false) -> ;
 			fi; 
-		:: else -> atomic { order1ch!1; order1ch!0 };	s1conf?inOrder; 
+		:: else -> 
+			if
+			:: (reqOrderNumber == 1) -> atomic { order1ch!1; order1ch!0 };	s1conf?inOrder; 
+			:: (reqOrderNumber == 2) -> atomic { order2ch!1; order2ch!0 };	s1conf?inOrder; 
+			fi;
 		fi;	
 	:: (inOrder == true) ->
 		if
-		:: (destination == station) -> inOrder = false; 
+		:: (fetch == false && sourceStation == station) -> 
+			fetch = true; 
+
+			// re-evaluate path 
+			if 
+			:: ( (station == 1 && sourceStation == 4) || (station - sourceStation == 1)) -> 
+				clockwise = false; 
+			:: else -> clockwise = true;  
+			fi; 
+
+		:: (fetch == true && destination == station) -> inOrder = false; fetch = false; 
 		:: else -> 
 			if
 			:: (clockwise == true && station == 1) -> ch12!1; ch12e?1; station = 2;
@@ -128,14 +149,19 @@ proctype shuttle1(byte station; byte capacity; byte charge)
 }
 proctype order1(byte sourceStn; byte destStn; byte numPeople) {
 	// ping all shuttles
+	atomic {
+	s1alert!1; 
 	s1alert!sourceStn;
 	s1alert!destStn;
 	s1alert!numPeople;
+	}
+
 	//get order price
 	int lowestPrice = 1000000; 
 	int lowestShuttle = 0; 
 	int thisPrice = lowestPrice; 
 	int thisShuttle = lowestShuttle; 
+
 	// loop through all shuttles
 	order1ch?thisShuttle;
 	order1ch?thisPrice; 
@@ -147,7 +173,34 @@ proctype order1(byte sourceStn; byte destStn; byte numPeople) {
 	// feedback 1 to lowestShuttle
 	s1conf!(lowestShuttle == 1);	
 }
+proctype order2(byte sourceStn; byte destStn; byte numPeople) {
+	// ping all shuttles
+	atomic {
+	s1alert!2; 
+	s1alert!sourceStn;
+	s1alert!destStn;
+	s1alert!numPeople;
+	}
+
+	//get order price
+	int lowestPrice = 1000000; 
+	int lowestShuttle = 0; 
+	int thisPrice = lowestPrice; 
+	int thisShuttle = lowestShuttle; 
+
+	// loop through all shuttles
+	order2ch?thisShuttle;
+	order2ch?thisPrice; 
+	if 
+	::(thisPrice < lowestPrice) -> lowestPrice = thisPrice; lowestShuttle = thisShuttle;
+	::else ->; 
+	fi;
+	
+	// feedback 1 to lowestShuttle
+	s1conf!(lowestShuttle == 1);	
+}
 init {
 	run order1(1, 3, 4); 
+	run order2(2, 3, 2); 
 	run shuttle1(1,4,2); 
 }
