@@ -171,33 +171,27 @@ proctype shuttle(byte shuttleNum; byte station; byte capacity; byte charge)
 	do
 	:: (inOrder == false) -> 
 		salert[shuttleNum]?reqOrderNumber;
-
+		salert[shuttleNum]?reqSourceStation;
+		salert[shuttleNum]?reqDestStation;
+		salert[shuttleNum]?reqCapacity;
 		if
-		:: (reqOrderNumber == 0) -> ;
-		:: else -> 
-			salert[shuttleNum]?reqSourceStation;
-			salert[shuttleNum]?reqDestStation;
-			salert[shuttleNum]?reqCapacity;
-			if
-			:: (reqCapacity <= capacity) -> 
-				int toCharge = reqCapacity * charge; 
-				atomic { shuttleMgmtIn!shuttleNum; shuttleMgmtIn!toCharge }; sconfirm[shuttleNum]?inOrder;				 	
-				if 
-				:: (inOrder == true) -> 
- 					totalCustomerInSystem =  totalCustomerInSystem + reqCapacity; 
-					sourceStation = reqSourceStation;
-					passengers[reqDestStation] = reqCapacity; 
-					if
-					// directly opposite / current station can just use clockwise
-					:: ( (station == 1 && sourceStation == 4) || (station - sourceStation == 1)) -> 
-						clockwise = false; 
-					:: else -> clockwise = true;  
-					fi; 
-					salert[shuttleNum]!0; //delimiter for alerts. 
-				:: (inOrder == false) -> ;
+		:: (reqCapacity <= capacity) -> 
+			int toCharge = reqCapacity * charge; 
+			atomic { shuttleMgmtIn!shuttleNum; shuttleMgmtIn!toCharge }; sconfirm[shuttleNum]?inOrder;				 	185				
+			if 
+			:: (inOrder == true) -> 
+ 				totalCustomerInSystem =  totalCustomerInSystem + reqCapacity; 
+				sourceStation = reqSourceStation;
+				passengers[reqDestStation] = reqCapacity; 
+				if
+				// directly opposite / current station can just use clockwise
+				:: ( (station == 1 && sourceStation == 4) || (station - sourceStation == 1)) -> 
+					clockwise = false; 
+				:: else -> clockwise = true;  
 				fi; 
-			:: else -> atomic { shuttleMgmtIn!shuttleNum; shuttleMgmtIn!0 };	sconfirm[shuttleNum]?inOrder; 
-			fi;
+			:: (inOrder == false) -> ;
+			fi; 
+		:: else -> atomic { shuttleMgmtIn!shuttleNum; shuttleMgmtIn!0 };	sconfirm[shuttleNum]?inOrder; 
 		fi;	
 	:: (inOrder == true) ->
 		if
@@ -207,10 +201,8 @@ proctype shuttle(byte shuttleNum; byte station; byte capacity; byte charge)
 		:: else -> ;
 		fi; 
 
-		salert[shuttleNum]?reqOrderNumber;
-		
-		if 
-		:: (reqOrderNumber > 0) -> 
+		do
+		:: salert[shuttleNum]?reqOrderNumber -> 
 			salert[shuttleNum]?reqSourceStation;
 			salert[shuttleNum]?reqDestStation;
 			salert[shuttleNum]?reqCapacity;
@@ -235,12 +227,12 @@ proctype shuttle(byte shuttleNum; byte station; byte capacity; byte charge)
 
 			if
 			::(newOrder) -> 
-				passengers[reqDestStation] = reqCapacity; 
+				passengers[reqDestStation] = reqCapacity;
+				totalCustomerInSystem =  totalCustomerInSystem + reqCapacity;  
 			:: else -> ; 
 			fi;
-			
-		:: else -> salert[shuttleNum]!0; //no orders received
-		fi;
+		:: empty(salert[shuttleNum]) -> break; 
+		od; 
 		
 		if
 		:: (fetch == false && sourceStation == station) -> fetch = true; 
