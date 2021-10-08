@@ -24,8 +24,8 @@ active proctype Track12()
 	bool inUse = false; 
 	byte shuttle; 
 	do 
-	:: (!inUse) -> ch12?shuttle; inUse = true; totalTrainOnTracks = totalTrainOnTracks + 1; 
-	:: ( inUse) -> ch12e!shuttle; inUse = false; totalTrainOnTracks = totalTrainOnTracks - 1; 
+	:: !inUse && empty(ch12e) -> ch12?shuttle; inUse = true; totalTrainOnTracks = totalTrainOnTracks + 1; 
+	:: (inUse) -> ch12e!shuttle; inUse = false; totalTrainOnTracks = totalTrainOnTracks - 1; 
 	od;
 }
 active proctype Track23() 
@@ -33,8 +33,8 @@ active proctype Track23()
 	bool inUse = false; 
 	byte shuttle; 
 	do 
-	:: (!inUse) -> ch23?shuttle; inUse = true; totalTrainOnTracks = totalTrainOnTracks + 1; 
-	:: ( inUse) -> ch23e!shuttle; inUse = false; totalTrainOnTracks = totalTrainOnTracks - 1; 
+	:: !inUse && empty(ch23e) -> ch23?shuttle; inUse = true; totalTrainOnTracks = totalTrainOnTracks + 1; 
+	:: (inUse) -> ch23e!shuttle; inUse = false; totalTrainOnTracks = totalTrainOnTracks - 1; 
 	od;
 }
 active proctype Track34() 
@@ -42,8 +42,8 @@ active proctype Track34()
 	bool inUse = false; 
 	byte shuttle; 
 	do 
-	:: (!inUse) -> ch34?shuttle; inUse = true; totalTrainOnTracks = totalTrainOnTracks + 1; 
-	:: ( inUse) -> ch34e!shuttle; inUse = false; totalTrainOnTracks = totalTrainOnTracks - 1; 
+	:: !inUse && empty(ch34e) -> ch34?shuttle; inUse = true; totalTrainOnTracks = totalTrainOnTracks + 1; 
+	:: (inUse) -> ch34e!shuttle; inUse = false; totalTrainOnTracks = totalTrainOnTracks - 1; 
 	od;
 }
 active proctype Track41() 
@@ -51,8 +51,8 @@ active proctype Track41()
 	bool inUse = false; 
 	byte shuttle; 
 	do 
-	:: (!inUse) -> ch41?shuttle; inUse = true; totalTrainOnTracks = totalTrainOnTracks + 1; 
-	:: ( inUse) -> ch41e!shuttle; inUse = false; totalTrainOnTracks = totalTrainOnTracks - 1; 
+	:: !inUse && empty(ch41e) -> ch41?shuttle; inUse = true; totalTrainOnTracks = totalTrainOnTracks + 1; 
+	:: (inUse) -> ch41e!shuttle; inUse = false; totalTrainOnTracks = totalTrainOnTracks - 1; 
 	od;
 }
 active proctype Track14() 
@@ -60,8 +60,8 @@ active proctype Track14()
 	bool inUse = false; 
 	byte shuttle; 
 	do 
-	:: (!inUse) -> ch14?shuttle; inUse = true; totalTrainOnTracks = totalTrainOnTracks + 1; 
-	:: ( inUse) -> ch14e!shuttle; inUse = false; totalTrainOnTracks = totalTrainOnTracks - 1; 
+	:: !inUse && empty(ch14e) -> ch14?shuttle; inUse = true; totalTrainOnTracks = totalTrainOnTracks + 1; 
+	:: (inUse) -> ch14e!shuttle; inUse = false; totalTrainOnTracks = totalTrainOnTracks - 1; 
 	od;
 }
 active proctype Track43() 
@@ -69,8 +69,8 @@ active proctype Track43()
 	bool inUse = false; 
 	byte shuttle; 
 	do 
-	:: (!inUse) -> ch43?shuttle; inUse = true; totalTrainOnTracks = totalTrainOnTracks + 1; 
-	:: ( inUse) -> ch43e!shuttle; inUse = false; totalTrainOnTracks = totalTrainOnTracks - 1; 
+	:: !inUse && empty(ch43e) -> ch43?shuttle; inUse = true; totalTrainOnTracks = totalTrainOnTracks + 1; 
+	:: (inUse) -> ch43e!shuttle; inUse = false; totalTrainOnTracks = totalTrainOnTracks - 1; 
 	od;
 }
 active proctype Track32() 
@@ -78,8 +78,8 @@ active proctype Track32()
 	bool inUse = false; 
 	byte shuttle; 
 	do 
-	:: (!inUse) -> ch32?shuttle; inUse = true; totalTrainOnTracks = totalTrainOnTracks + 1; 
-	:: ( inUse) -> ch32e!shuttle; inUse = false; totalTrainOnTracks = totalTrainOnTracks - 1; 
+	:: !inUse && empty(ch32e) -> ch32?shuttle; inUse = true; totalTrainOnTracks = totalTrainOnTracks + 1; 
+	:: (inUse) -> ch32e!shuttle; inUse = false; totalTrainOnTracks = totalTrainOnTracks - 1; 
 	od;
 }
 active proctype Track21() 
@@ -87,8 +87,8 @@ active proctype Track21()
 	bool inUse = false; 
 	byte shuttle; 
 	do 
-	:: (!inUse) -> ch21?shuttle; inUse = true; totalTrainOnTracks = totalTrainOnTracks + 1; 
-	:: ( inUse) -> ch21e!shuttle; inUse = false; totalTrainOnTracks = totalTrainOnTracks - 1; 
+	:: !inUse && empty(ch21e) -> ch21?shuttle; inUse = true; totalTrainOnTracks = totalTrainOnTracks + 1; 
+	:: (inUse) -> ch21e!shuttle; inUse = false; totalTrainOnTracks = totalTrainOnTracks - 1; 
 	od;
 }
 
@@ -155,6 +155,8 @@ active proctype Management() {
 
 proctype shuttle(byte shuttleNum; byte station; byte capacity; byte charge)
 {
+	bool moving = false; 
+	chan movingAlert = [0] of {byte};
 	bool fetch = false; 
 	bool inOrder = false; 
 	bool clockwise = true; 
@@ -194,13 +196,7 @@ proctype shuttle(byte shuttleNum; byte station; byte capacity; byte charge)
 		:: else -> atomic { shuttleMgmtIn!shuttleNum; shuttleMgmtIn!0 };	sconfirm[shuttleNum]?inOrder; 
 		fi;	
 	:: (inOrder == true) ->
-		if
-		:: (fetch) -> 
-			totalCustomerInSystem =  totalCustomerInSystem - passengers[station];
-			passengers[station] = 0;  
-		:: else -> ;
-		fi; 
-
+		// check if received any new orders.. 
 		do
 		:: salert[shuttleNum]?reqOrderNumber -> 
 			salert[shuttleNum]?reqSourceStation;
@@ -233,22 +229,43 @@ proctype shuttle(byte shuttleNum; byte station; byte capacity; byte charge)
 			fi;
 		:: empty(salert[shuttleNum]) -> break; 
 		od; 
+
+		if
+		:: (moving) -> 
+			do
+			:: movingAlert?shuttleNum -> moving = false;
+			:: empty(movingAlert) -> break; 
+			od; 
+		:: else -> ;
+		fi; 
 		
 		if
-		:: (fetch == false && sourceStation == station) -> fetch = true; 
-		:: (fetch == true && (passengers[1] + passengers[2] + passengers[3] + passengers[4]) == 0) -> 
-			inOrder = false; fetch = false;
-		:: else -> 
+		:: (fetch && !moving) -> 
+			totalCustomerInSystem =  totalCustomerInSystem - passengers[station];
+			passengers[station] = 0;  
+		:: else -> ;
+		fi; 
+		
+		if
+		:: (!moving) -> 
 			if
-			:: (clockwise == true && station == 1) -> ch12!1; ch12e?1; station = 2;
-			:: (clockwise == true && station == 2) -> ch23!1; ch23e?1; station = 3;
-			:: (clockwise == true && station == 3) -> ch34!1; ch34e?1; station = 4;
-			:: (clockwise == true && station == 4) -> ch41!1; ch41e?1; station = 1;
-			:: (clockwise  == false && station == 1) -> ch14!1; ch14e?1; station = 4;
-			:: (clockwise  == false && station == 2) -> ch21!1; ch21e?1; station = 1; 
-			:: (clockwise  == false && station == 3) -> ch32!1; ch32e?1; station = 2; 
-			:: (clockwise  == false && station == 4) -> ch43!1; ch43e?1; station = 3; 
+			:: (!fetch && sourceStation == station) -> fetch = true; 
+			:: (fetch && (passengers[1] + passengers[2] + passengers[3] + passengers[4]) == 0) ->
+				inOrder = false; fetch = false;
+			:: else -> 
+				moving = true; 
+				if
+			:: (clockwise == true && station == 1) -> ch12!shuttleNum; station = 2; movingAlert = ch12e; 
+			:: (clockwise == true && station == 2) -> ch23!shuttleNum; station = 3; movingAlert = ch23e;
+			:: (clockwise == true && station == 3) -> ch34!shuttleNum; station = 4; movingAlert = ch34e;
+			:: (clockwise == true && station == 4) -> ch41!shuttleNum; station = 1; movingAlert = ch41e;
+			:: (clockwise  == false && station == 1) -> ch14!shuttleNum; station = 4; movingAlert = ch14e;
+			:: (clockwise  == false && station == 2) -> ch21!shuttleNum; station = 1; movingAlert = ch21e;
+			:: (clockwise  == false && station == 3) -> ch32!shuttleNum; station = 2; movingAlert = ch32e;
+			:: (clockwise  == false && station == 4) -> ch43!shuttleNum; station = 3; movingAlert =ch43e;
+				fi;
 			fi; 
+		:: (moving) -> ;
 		fi; 
 	od; 
 }
