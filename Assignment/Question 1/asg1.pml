@@ -15,62 +15,80 @@ chan ch32e = [0] of {byte};
 chan ch21 = [0] of {byte};
 chan ch21e = [0] of {byte};
 
+int totalTrainOnTracks = 0; // for ltl check
+
 // Track name syntax: Track<From><To>
 
 active proctype Track12() 
 {
+	bool inUse = false; 
 	byte shuttle; 
 	do 
-	:: ch12?shuttle-> ch12e!shuttle;
+	:: (!inUse) -> ch12?shuttle; inUse = true; totalTrainOnTracks = totalTrainOnTracks + 1; 
+	:: ( inUse) -> ch12e!shuttle; inUse = false; totalTrainOnTracks = totalTrainOnTracks - 1; 
 	od;
 }
 active proctype Track23() 
 {
+	bool inUse = false; 
 	byte shuttle; 
 	do 
-	:: ch23?shuttle -> ch23e!shuttle;
+	:: (!inUse) -> ch23?shuttle; inUse = true; totalTrainOnTracks = totalTrainOnTracks + 1; 
+	:: ( inUse) -> ch23e!shuttle; inUse = false; totalTrainOnTracks = totalTrainOnTracks - 1; 
 	od;
 }
 active proctype Track34() 
 {
+	bool inUse = false; 
 	byte shuttle; 
 	do 
-	:: ch34?shuttle -> ch34e!shuttle;
+	:: (!inUse) -> ch34?shuttle; inUse = true; totalTrainOnTracks = totalTrainOnTracks + 1; 
+	:: ( inUse) -> ch34e!shuttle; inUse = false; totalTrainOnTracks = totalTrainOnTracks - 1; 
 	od;
 }
 active proctype Track41() 
 {
+	bool inUse = false; 
 	byte shuttle; 
 	do 
-	:: ch41?shuttle -> ch41e!shuttle;
+	:: (!inUse) -> ch41?shuttle; inUse = true; totalTrainOnTracks = totalTrainOnTracks + 1; 
+	:: ( inUse) -> ch41e!shuttle; inUse = false; totalTrainOnTracks = totalTrainOnTracks - 1; 
 	od;
 }
 active proctype Track14() 
 {
+	bool inUse = false; 
 	byte shuttle; 
 	do 
-	:: ch14?shuttle -> ch14e!shuttle;
+	:: (!inUse) -> ch14?shuttle; inUse = true; totalTrainOnTracks = totalTrainOnTracks + 1; 
+	:: ( inUse) -> ch14e!shuttle; inUse = false; totalTrainOnTracks = totalTrainOnTracks - 1; 
 	od;
 }
 active proctype Track43() 
 {
+	bool inUse = false; 
 	byte shuttle; 
 	do 
-	:: ch43?shuttle -> ch43e!shuttle;
+	:: (!inUse) -> ch43?shuttle; inUse = true; totalTrainOnTracks = totalTrainOnTracks + 1; 
+	:: ( inUse) -> ch43e!shuttle; inUse = false; totalTrainOnTracks = totalTrainOnTracks - 1; 
 	od;
 }
 active proctype Track32() 
 {
+	bool inUse = false; 
 	byte shuttle; 
 	do 
-	:: ch32?shuttle -> ch32e!shuttle;
+	:: (!inUse) -> ch32?shuttle; inUse = true; totalTrainOnTracks = totalTrainOnTracks + 1; 
+	:: ( inUse) -> ch32e!shuttle; inUse = false; totalTrainOnTracks = totalTrainOnTracks - 1; 
 	od;
 }
 active proctype Track21() 
 {
+	bool inUse = false; 
 	byte shuttle; 
 	do 
-	:: ch21?shuttle -> ch21e!shuttle;
+	:: (!inUse) -> ch21?shuttle; inUse = true; totalTrainOnTracks = totalTrainOnTracks + 1; 
+	:: ( inUse) -> ch21e!shuttle; inUse = false; totalTrainOnTracks = totalTrainOnTracks - 1; 
 	od;
 }
 
@@ -78,6 +96,7 @@ byte numShuttle = 4;
 
 chan orderMgmtIn = [4] of { byte };  //first = ordernum, second for source, 3rd for dest, 4th for capacity
 chan shuttleMgmtIn = [8] of { byte }; // { first = shuttle#, second = price (0 for fail); } * numShuttle
+int totalCustomerInSystem = 0; //track all customers for ltl
 
 // 1-based indexing for easy management
 // salert -> shuttle alert (for new order / check alive status) 
@@ -165,6 +184,7 @@ proctype shuttle(byte shuttleNum; byte station; byte capacity; byte charge)
 				atomic { shuttleMgmtIn!shuttleNum; shuttleMgmtIn!toCharge }; sconfirm[shuttleNum]?inOrder;				 	
 				if 
 				:: (inOrder == true) -> 
+ 					totalCustomerInSystem =  totalCustomerInSystem + reqCapacity; 
 					sourceStation = reqSourceStation;
 					passengers[reqDestStation] = reqCapacity; 
 					if
@@ -181,7 +201,9 @@ proctype shuttle(byte shuttleNum; byte station; byte capacity; byte charge)
 		fi;	
 	:: (inOrder == true) ->
 		if
-		:: (fetch) -> passengers[station] = 0; 
+		:: (fetch) -> 
+			totalCustomerInSystem =  totalCustomerInSystem - passengers[station];
+			passengers[station] = 0;  
 		:: else -> ;
 		fi; 
 
@@ -261,3 +283,7 @@ init {
 	run shuttle(3,2,5,1);
 	run shuttle(4,3,3,3); 
 }
+
+#define no_passenger (totalCustomerInSystem == 0)
+#define no_train_on_track (totalTrainOnTracks == 0)
+ltl v1 { []<> (no_passenger && no_train_on_track) } 
