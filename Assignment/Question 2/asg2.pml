@@ -85,9 +85,8 @@ proctype Client(byte clientId) {
 		client_in[clientId]?resp; 
 
 		if 
-		:: (resp == CONNECTED) -> 
-			isConnected[clientId] = true; 
-			
+		:: (resp == CONNECTED) -> isConnected[clientId] = true; 
+		:: (resp == FAILED) -> isConnected[clientId] = false; 
 		:: else -> ;
 		fi; 
 	:: (isConnected[clientId]) -> 
