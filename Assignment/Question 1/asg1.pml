@@ -177,7 +177,10 @@ proctype shuttle(byte shuttleNum; byte station; byte capacity; byte charge)
 		salert[shuttleNum]?reqDestStation;
 		salert[shuttleNum]?reqCapacity;
 		if
-		:: (reqCapacity <= capacity) -> 
+		:: (reqCapacity <= capacity 
+			&& (  (((reqSourceStation + 4 - station) % 4) <= 2 )  // + 4 to prevent negative modulo
+			       ||    (((reqSourceStation + station) % 4) <= 2 )  ) 
+		    )-> 
 			int toCharge = reqCapacity * charge; 
 			atomic { shuttleMgmtIn!shuttleNum; shuttleMgmtIn!toCharge }; sconfirm[shuttleNum]?inOrder;				 	185				
 			if 
@@ -206,9 +209,10 @@ proctype shuttle(byte shuttleNum; byte station; byte capacity; byte charge)
 			byte currentCapacity = passengers[1] + passengers[2] + passengers[3] + passengers[4]; 
 			toCharge = reqCapacity * charge; 
 
-			bool canAccept = ((currentCapacity + reqCapacity) <= capacity) && 
-				( (clockwise && (station - 1) != reqSourceStation) || 
-				   (!clockwise && (station + 1) != reqSourceStation) ); 
+			bool canAccept = (   ((currentCapacity + reqCapacity) <= capacity)  
+				&&  ( (clockwise && (reqSourceStation + 4 - station) <= 2)  
+				      ||  (!clockwise && (station + 4 - reqSourceStation) <= 2) )
+				); 
 
 			bool newOrder = false; 
 
