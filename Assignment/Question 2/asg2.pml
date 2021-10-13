@@ -6,7 +6,7 @@ bool WCP_enabled = true;
 int WCP_current_weather = 1; 
 
 chan cm_request = [1] of { byte }; 
-chan wcp_update = [1] of { byte }; 
+chan wcp_update = [10 ] of { byte }; //10 buffer for user to click update
 
 byte numClients = 3; 
 
@@ -333,7 +333,7 @@ proctype Client(byte clientId) {
 }
 
 active proctype User() {
-	byte expectedUpdate = 5; 
+	byte expectedUpdate = 10; 
 	byte numUpdate = 0; 
 
 	// non deterministic update and exit 
@@ -353,3 +353,9 @@ init {
 	run Client(2); 
 	run Client(3); 
 }
+
+//eventually all will be connected & idle. 
+
+#define all_idle_state ( status[0] == IDLE && status[1] == IDLE && status[2] == IDLE && status[3] == IDLE)
+#define all_connected (isConnected[1] == YES && isConnected[2] == YES && isConnected[3] == YES)
+ltl v1 { []<> (all_idle_state && all_connected) } 
