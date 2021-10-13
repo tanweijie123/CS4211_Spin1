@@ -281,51 +281,29 @@ proctype Client(byte clientId) {
 			pending_weather = WCP_current_weather; 
 			retrieve_success = (pending_weather == WCP_current_weather);  
 
-			/* [[ORIGINAL VERSION]]
 			if
 			:: (retrieve_success) -> client_out[clientId]!SUCCESS;
 			:: else -> client_out[clientId]!FAILED; 
 			fi; 
-			*/
 
-			/* [[RANDOM VERSION]] */
-			if
-			:: true -> client_out[clientId]!SUCCESS;
-			:: true -> client_out[clientId]!FAILED; 
-			fi;
-			
 		:: (isConnected[clientId] == YES && resp == USE_WEATHER) -> 
 			current_weather = pending_weather; 
 			use_success = (current_weather == pending_weather); 
 			
-			/* [[ORIGINAL VERSION]]
 			if
 			:: (retrieve_success) -> client_out[clientId]!SUCCESS;
 			:: else -> client_out[clientId]!FAILED; 
 			fi; 
-			*/
 
-			/* [[RANDOM VERSION]] */
-			if
-			:: true -> client_out[clientId]!SUCCESS;
-			:: true -> client_out[clientId]!FAILED; 
-			fi;
 		:: (isConnected[clientId] == YES && resp == USE_OLD) -> 
 			pending_weather = current_weather; 
 			use_success = (current_weather == pending_weather); 
 
-			/* [[ORIGINAL VERSION]]
 			if
 			:: (retrieve_success) -> client_out[clientId]!SUCCESS;
 			:: else -> client_out[clientId]!FAILED; 
 			fi; 
-			*/
 
-			/* [[RANDOM VERSION]] */
-			if
-			:: true -> client_out[clientId]!SUCCESS;
-			:: true -> client_out[clientId]!FAILED; 
-			fi;
 		:: else -> ; 
 		fi;  	
 	od; 
