@@ -110,9 +110,9 @@ active proctype CommManager() {
 		for (i: 1 .. numClients) {
 			if
 			:: (isConnected[i] == YES) -> 
-				mtype:job isSuccessful = false; 
+				mtype:job isSuccessful = SUCCESS; 
 				client_out[i]?isSuccessful; 
-				allSuccess = (allSuccess && isSuccessful); 
+				allSuccess = (allSuccess && (isSuccessful == SUCCESS) ); 
 			:: else -> ;
 			fi; 
 		}
@@ -152,9 +152,9 @@ active proctype CommManager() {
 		for (i: 1 .. numClients) {
 			if
 			:: (isConnected[i] == YES) -> 
-				mtype:job isSuccessful = false; 
+				mtype:job isSuccessful = SUCCESS; 
 				client_out[i]?isSuccessful; 
-				allSuccess = (allSuccess && isSuccessful); 
+				allSuccess = (allSuccess && (isSuccessful == SUCCESS) ); 
 			:: else -> ;
 			fi; 
 		}
@@ -195,9 +195,9 @@ active proctype CommManager() {
 		for (i: 1 .. numClients) {
 			if
 			:: (isConnected[i] == YES) -> 
-				mtype:job isSuccessful = false; 
+				mtype:job isSuccessful = SUCCESS; 
 				client_out[i]?isSuccessful; 
-				allSuccess = (allSuccess && isSuccessful); 
+				allSuccess = (allSuccess && (isSuccessful == SUCCESS) ); 
 			:: else -> ;
 			fi; 
 		}
@@ -265,7 +265,7 @@ proctype Client(byte clientId) {
 				client_out[clientId]!FAILED; 
 				client_in[clientId]?DISCONNECTED; 
 				isConnected[clientId] = NO; 
-			fi; 
+			fi; 			
 		:: (isConnected[clientId] == IP && resp == USE_WEATHER) -> 
 			current_weather = pending_weather; 
 			use_success = (current_weather == pending_weather); 
@@ -277,25 +277,54 @@ proctype Client(byte clientId) {
 				isConnected[clientId] = NO;
 			fi;
 		:: (isConnected[clientId] == YES && resp == GET_WEATHER) -> 
+			
 			pending_weather = WCP_current_weather; 
 			retrieve_success = (pending_weather == WCP_current_weather);  
+
+			/* [[ORIGINAL VERSION]]
 			if
 			:: (retrieve_success) -> client_out[clientId]!SUCCESS;
 			:: else -> client_out[clientId]!FAILED; 
 			fi; 
+			*/
+
+			/* [[RANDOM VERSION]] */
+			if
+			:: true -> client_out[clientId]!SUCCESS;
+			:: true -> client_out[clientId]!FAILED; 
+			fi;
+			
 		:: (isConnected[clientId] == YES && resp == USE_WEATHER) -> 
 			current_weather = pending_weather; 
 			use_success = (current_weather == pending_weather); 
+			
+			/* [[ORIGINAL VERSION]]
 			if
-			:: (use_success) -> client_out[clientId]!SUCCESS;
+			:: (retrieve_success) -> client_out[clientId]!SUCCESS;
 			:: else -> client_out[clientId]!FAILED; 
+			fi; 
+			*/
+
+			/* [[RANDOM VERSION]] */
+			if
+			:: true -> client_out[clientId]!SUCCESS;
+			:: true -> client_out[clientId]!FAILED; 
 			fi;
 		:: (isConnected[clientId] == YES && resp == USE_OLD) -> 
 			pending_weather = current_weather; 
 			use_success = (current_weather == pending_weather); 
+
+			/* [[ORIGINAL VERSION]]
 			if
-			:: (use_success) -> client_out[clientId]!SUCCESS;
+			:: (retrieve_success) -> client_out[clientId]!SUCCESS;
 			:: else -> client_out[clientId]!FAILED; 
+			fi; 
+			*/
+
+			/* [[RANDOM VERSION]] */
+			if
+			:: true -> client_out[clientId]!SUCCESS;
+			:: true -> client_out[clientId]!FAILED; 
 			fi;
 		:: else -> ; 
 		fi;  	
@@ -304,7 +333,7 @@ proctype Client(byte clientId) {
 }
 
 active proctype User() {
-	byte expectedUpdate = 10; 
+	byte expectedUpdate = 5; 
 	byte numUpdate = 0; 
 
 	// non deterministic update and exit 
