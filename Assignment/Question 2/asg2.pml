@@ -96,7 +96,7 @@ active proctype CommManager() {
 		for (i: 1 .. numClients) {
 			if
 			:: (isConnected[i] == YES) -> 
-				client_in[i]?GET_WEATHER;
+				client_in[i]!GET_WEATHER;
 				status[i] = UPDATING; 
 			:: else -> ;
 			fi; 
@@ -111,7 +111,7 @@ active proctype CommManager() {
 			if
 			:: (isConnected[i] == YES) -> 
 				mtype:job isSuccessful = false; 
-				client_out[i]!isSuccessful; 
+				client_out[i]?isSuccessful; 
 				allSuccess = (allSuccess && isSuccessful); 
 			:: else -> ;
 			fi; 
@@ -123,7 +123,7 @@ active proctype CommManager() {
 			for (i: 1 .. numClients) {
 				if
 				:: (isConnected[i] == YES) -> 
-					client_in[i]?USE_WEATHER; 
+					client_in[i]!USE_WEATHER; 
 					status[i] = POST_UPDATING;  
 				:: else -> ;
 				fi; 
@@ -137,7 +137,7 @@ active proctype CommManager() {
 			for (i: 1 .. numClients) {
 				if
 				:: (isConnected[i] == YES) -> 
-					client_in[i]?USE_OLD; 
+					client_in[i]!USE_OLD; 
 					status[i] = POST_REVERTING;  
 				:: else -> ;
 				fi; 
@@ -153,7 +153,7 @@ active proctype CommManager() {
 			if
 			:: (isConnected[i] == YES) -> 
 				mtype:job isSuccessful = false; 
-				client_out[i]!isSuccessful; 
+				client_out[i]?isSuccessful; 
 				allSuccess = (allSuccess && isSuccessful); 
 			:: else -> ;
 			fi; 
@@ -196,7 +196,7 @@ active proctype CommManager() {
 			if
 			:: (isConnected[i] == YES) -> 
 				mtype:job isSuccessful = false; 
-				client_out[i]!isSuccessful; 
+				client_out[i]?isSuccessful; 
 				allSuccess = (allSuccess && isSuccessful); 
 			:: else -> ;
 			fi; 
@@ -246,7 +246,7 @@ proctype Client(byte clientId) {
 
 	do
 	:: (isConnected[clientId] == NO) -> 
-		atomic { cm_request!clientId; } 
+		cm_request!clientId; 
 		client_in[clientId]?resp; 
 
 		if 
@@ -257,7 +257,7 @@ proctype Client(byte clientId) {
 	:: client_in[clientId]?resp -> //listen for commands  
 		if
 		:: (isConnected[clientId] == IP && resp == GET_WEATHER) -> 
-			atomic { pending_weather = WCP_current_weather; } 
+			pending_weather = WCP_current_weather; 
 			retrieve_success = (pending_weather == WCP_current_weather);  
 			if
 			:: (retrieve_success) -> client_out[clientId]!SUCCESS;
@@ -267,7 +267,7 @@ proctype Client(byte clientId) {
 				isConnected[clientId] = NO; 
 			fi; 
 		:: (isConnected[clientId] == IP && resp == USE_WEATHER) -> 
-			atomic { current_weather = pending_weather; } 
+			current_weather = pending_weather; 
 			use_success = (current_weather == pending_weather); 
 			if
 			:: (use_success) -> client_out[clientId]!SUCCESS; isConnected[clientId] = YES; 
@@ -277,21 +277,21 @@ proctype Client(byte clientId) {
 				isConnected[clientId] = NO;
 			fi;
 		:: (isConnected[clientId] == YES && resp == GET_WEATHER) -> 
-			atomic { pending_weather = WCP_current_weather; } 
+			pending_weather = WCP_current_weather; 
 			retrieve_success = (pending_weather == WCP_current_weather);  
 			if
 			:: (retrieve_success) -> client_out[clientId]!SUCCESS;
 			:: else -> client_out[clientId]!FAILED; 
 			fi; 
 		:: (isConnected[clientId] == YES && resp == USE_WEATHER) -> 
-			atomic { current_weather = pending_weather; } 
+			current_weather = pending_weather; 
 			use_success = (current_weather == pending_weather); 
 			if
 			:: (use_success) -> client_out[clientId]!SUCCESS;
 			:: else -> client_out[clientId]!FAILED; 
 			fi;
 		:: (isConnected[clientId] == YES && resp == USE_OLD) -> 
-			atomic {  pending_weather = current_weather; } 
+			pending_weather = current_weather; 
 			use_success = (current_weather == pending_weather); 
 			if
 			:: (use_success) -> client_out[clientId]!SUCCESS;
@@ -304,7 +304,7 @@ proctype Client(byte clientId) {
 }
 
 active proctype User() {
-	byte expectedUpdate = 5; 
+	byte expectedUpdate = 10; 
 	byte numUpdate = 0; 
 
 	// non deterministic update and exit 
@@ -321,6 +321,6 @@ active proctype User() {
 init {
 	// Client (byte clientId)
 	run Client(1); 
-	//run Client(2); 
-	//run Client(3); 
+	run Client(2); 
+	run Client(3); 
 }
