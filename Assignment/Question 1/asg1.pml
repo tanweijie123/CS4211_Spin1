@@ -149,8 +149,7 @@ active proctype Management() {
 		for (k : 1 .. numShuttle) {
 			sconfirm[k]!(lowestShuttle == k);
 		} 
-	od; 
-	
+	od; 	
 }
 
 proctype shuttle(byte shuttleNum; byte station; byte capacity; byte charge)
@@ -179,7 +178,7 @@ proctype shuttle(byte shuttleNum; byte station; byte capacity; byte charge)
 		if
 		:: (reqCapacity <= capacity 
 			&& (  (((reqSourceStation + 4 - station) % 4) <= 2 )  // + 4 to prevent negative modulo
-			       ||    (((reqSourceStation + station) % 4) <= 2 )  ) 
+			       ||    (((station + 4 - reqSourceStation ) % 4) <= 2 )  ) 
 		    )-> 
 			int toCharge = reqCapacity * charge; 
 			atomic { shuttleMgmtIn!shuttleNum; shuttleMgmtIn!toCharge }; sconfirm[shuttleNum]?inOrder;				 	185				
@@ -189,10 +188,9 @@ proctype shuttle(byte shuttleNum; byte station; byte capacity; byte charge)
 				sourceStation = reqSourceStation;
 				passengers[reqDestStation] = reqCapacity; 
 				if
-				// directly opposite / current station can just use clockwise
-				:: ( (station == 1 && sourceStation == 4) || (station - sourceStation == 1)) -> 
-					clockwise = false; 
-				:: else -> clockwise = true;  
+				:: ( ((reqSourceStation + 4 - station) % 4) <= 2) -> 
+					clockwise = true;   
+				:: else -> clockwise = false;
 				fi; 
 			:: (inOrder == false) -> ;
 			fi; 
