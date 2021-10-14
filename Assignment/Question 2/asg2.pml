@@ -3,10 +3,10 @@ mtype:connStatus = { NO, IP, YES }; // IP = in progress
 mtype:job = { FAILED, SUCCESS, CONNECTED, DISCONNECTED, GET_WEATHER, USE_WEATHER, USE_OLD };
 
 bool WCP_enabled = true; 
-int WCP_current_weather = 1; 
+int WCP_current_weather = 0; 
 
 chan cm_request = [1] of { byte }; 
-chan wcp_update = [10 ] of { byte }; //10 buffer for user to click update
+chan wcp_update = [1] of { byte };
 
 byte numClients = 3; 
 
@@ -16,9 +16,9 @@ chan client_out[4] = [1] of { mtype:job }; // used for communication OUT of clie
 
 mtype status[4] = { IDLE, IDLE, IDLE, IDLE}; // 0-th array is CM, 1-st onwards is clients 
 mtype:connStatus isConnected[4] = { NO, NO, NO, NO }; // for clients to check their connection status
+int clientWeather[4] = { 0, 0, 0, 0 }; //for client weather
 
 active proctype CommManager() {
-	int current_weather = 0; 
 	int pending_weather = 0; 
 		
 	//var declaration
@@ -89,6 +89,7 @@ active proctype CommManager() {
 		do 
 		:: cm_request?rejectRequestFrom -> client_in[rejectRequestFrom]!FAILED; 
 		:: empty(cm_request) -> break;
+		//:: true -> break;
 		od; 
 		 
 	:: (status[0] == PRE_UPDATING) -> 
@@ -236,8 +237,8 @@ active proctype CommManager() {
 }
 
 proctype Client(byte clientId) {
-	int current_weather = 0; 
 	int pending_weather = 0; 
+	int finalised_weather = 0; 
 	
 	//var declaration
 	mtype:job resp; 
@@ -267,10 +268,13 @@ proctype Client(byte clientId) {
 				isConnected[clientId] = NO; 
 			fi; 			
 		:: (isConnected[clientId] == IP && resp == USE_WEATHER) -> 
-			current_weather = pending_weather; 
-			use_success = (current_weather == pending_weather); 
+			finalised_weather = pending_weather; 
+			use_success = (finalised_weather == pending_weather); 
 			if
-			:: (use_success) -> client_out[clientId]!SUCCESS; isConnected[clientId] = YES; 
+			:: (use_success) -> 
+				client_out[clientId]!SUCCESS; 
+				isConnected[clientId] = YES; 
+				clientWeather[clientId] = finalised_weather; 
 			:: else -> 
 				client_out[clientId]!FAILED; 
 				client_in[clientId]?DISCONNECTED; 
@@ -284,23 +288,28 @@ proctype Client(byte clientId) {
 			if
 			:: (retrieve_success) -> client_out[clientId]!SUCCESS;
 			:: else -> client_out[clientId]!FAILED; 
+			// :: true -> client_out[clientId]!FAILED; // FOR NON-DETERMINISTIC PURPOSE
 			fi; 
 
 		:: (isConnected[clientId] == YES && resp == USE_WEATHER) -> 
-			current_weather = pending_weather; 
-			use_success = (current_weather == pending_weather); 
+			finalised_weather = pending_weather; 
+			use_success = (finalised_weather == pending_weather); 
 			
 			if
-			:: (retrieve_success) -> client_out[clientId]!SUCCESS;
+			:: (retrieve_success) -> 
+				client_out[clientId]!SUCCESS; 
+				clientWeather[clientId] = finalised_weather;
 			:: else -> client_out[clientId]!FAILED; 
 			fi; 
 
 		:: (isConnected[clientId] == YES && resp == USE_OLD) -> 
-			pending_weather = current_weather; 
-			use_success = (current_weather == pending_weather); 
+			pending_weather = clientWeather[clientId]; 
+			use_success = (clientWeather[clientId] == pending_weather); 
 
 			if
-			:: (retrieve_success) -> client_out[clientId]!SUCCESS;
+			:: (retrieve_success) -> 
+				client_out[clientId]!SUCCESS; 
+				finalised_weather = clientWeather[clientId]; 
 			:: else -> client_out[clientId]!FAILED; 
 			fi; 
 
@@ -311,7 +320,7 @@ proctype Client(byte clientId) {
 }
 
 active proctype User() {
-	byte expectedUpdate = 10; 
+	byte expectedUpdate = 5; 
 	byte numUpdate = 0; 
 
 	// non deterministic update and exit 
@@ -332,8 +341,8 @@ init {
 	run Client(3); 
 }
 
-//eventually all will be connected & idle. 
+//eventually clients will have the lastest weather update
 
-#define all_idle_state ( status[0] == IDLE && status[1] == IDLE && status[2] == IDLE && status[3] == IDLE)
-#define all_connected (isConnected[1] == YES && isConnected[2] == YES && isConnected[3] == YES)
-ltl v1 { []<> (all_idle_state && all_connected) } 
+#define updatedWeather (clientWeather[1] == WCP_current_weather) && (clientWeather[2] == WCP_current_weather) && (clientWeather[3] == WCP_current_weather)
+
+ltl v1 { []<> (updatedWeather) }
